@@ -1,0 +1,48 @@
+---
+- name: app setup
+  hosts: all
+  gather_facts: no
+  become: yes
+
+  vars:
+    version: v1
+
+  tasks:
+    # Установить два пакета по списку
+    - name: install packages
+      apt:
+        name: "{{ item }}"
+        state: present
+        update_cache: yes
+      loop: 
+        - docker.io
+        - python3-pip
+
+    # Установить модуль для ansible, чтобы управлять docker
+    - name: install pip for docker
+      pip:
+        name: docker
+
+    # Чуть изменить конфиг docker
+    # Если файл изменялся - вызвать handler с именем restart docker (ниже)
+    - name: configure docker
+      copy:
+        content: '{ "userland-proxy": false }'
+        dest: /etc/docker/daemon.json
+      notify: restart docker
+
+    # Развернуть сам контейнер
+    - name: docker hello
+      docker_container:
+        name: "hello-{{ version }}"
+        image: "maniaque/hello:{{ version }}"
+        restart_policy: unless-stopped
+        container_default_behavior: compatibility
+        published_ports:
+          - 80:80
+
+  handlers:
+    - name: restart docker
+      systemd:
+        name: docker
+        state: restarted
